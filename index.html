@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>BRONZE DIGITAL SCORING - Ketua Pertandingan</title>
+    
+    <!-- Libraries -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800;900&display=swap');
+        body { font-family: 'Montserrat', sans-serif; background-color: #f8fafc; color: #1e293b; margin: 0; height: 100vh; width: 100vw; overflow: hidden; }
+        
+        .screen { display: flex; height: 100vh; width: 100vw; flex-direction: column; position: absolute; top: 0; left: 0; background: #f8fafc; }
+
+        .sudut-merah-bg { background-color: rgba(239, 68, 68, 0.05); border-left: 5px solid #ef4444; }
+        .sudut-biru-bg { background-color: rgba(59, 130, 246, 0.05); border-left: 5px solid #3b82f6; }
+
+        /* Custom Scrollbar */
+        .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: rgba(0,0,0,0.05); border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.2); border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.3); }
+
+        /* Tabel Bergaris Lengkap */
+        .table-bordered { width: 100%; border-collapse: collapse; min-width: 500px; }
+        .table-bordered th, .table-bordered td { border: 1px solid #cbd5e1; padding: 6px; font-size: 11px; }
+        .table-bordered th { background-color: #f1f5f9; color: #334155; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px; }
+        
+        @media (min-width: 768px) {
+            .table-bordered { min-width: 100%; }
+            .table-bordered th, .table-bordered td { padding: 10px; font-size: 13px; }
+            .table-bordered th { font-size: 12px; letter-spacing: 1px; }
+        }
+        
+        /* Tambahan style khusus saat proses cetak PDF */
+        .exporting-pdf { padding: 20px !important; background: white !important; height: auto !important; }
+        .exporting-pdf .hide-on-pdf { display: none !important; }
+    </style>
+</head>
+<body>
+
+    <!-- MODAL STATISTIK (DIAGRAM LINGKARAN) -->
+    <div id="statistik-modal" class="hidden fixed inset-0 bg-slate-900/90 z-[1000] flex items-center justify-center p-2 md:p-4 backdrop-blur-sm transition-opacity">
+        <div class="bg-white rounded-xl md:rounded-3xl w-full max-w-5xl relative shadow-2xl border-4 border-indigo-100 max-h-[98vh] flex flex-col overflow-hidden">
+            
+            <!-- Tombol Navigasi Modal -->
+            <div class="absolute top-3 right-3 md:top-4 md:right-5 z-20 flex gap-2 items-center">
+                <button onclick="exportToPDF('pdf-statistik-area', 'Statistik_Evaluasi_Juri.pdf')" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 md:px-4 md:py-2 rounded shadow-md text-[10px] md:text-xs font-black tracking-wide flex items-center gap-2 transition-colors">
+                    <i class="fas fa-file-pdf"></i> <span class="hidden sm:inline">EXPORT PDF</span><span class="sm:hidden">PDF</span>
+                </button>
+                <button onclick="toggleStatistik(false)" class="text-gray-400 hover:text-red-500 text-xl md:text-2xl transition-colors bg-white rounded-full w-8 h-8 flex items-center justify-center shadow-sm">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <!-- Container Scroll -->
+            <div class="flex-1 overflow-y-auto custom-scrollbar w-full h-full">
+                <!-- Area Target Export PDF -->
+                <div id="pdf-statistik-area" class="p-4 md:p-8 bg-white w-full h-full flex flex-col">
+                    <h2 class="text-center font-black text-indigo-700 text-lg md:text-2xl mb-1 uppercase tracking-widest mt-2 md:mt-0"><i class="fas fa-chart-pie mr-2"></i>Statistik & Evaluasi Juri</h2>
+                    <p class="text-center text-[10px] md:text-xs text-gray-500 font-bold uppercase mb-6 border-b pb-4">Persentase Validasi Poin & Tindakan Double Click</p>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8 flex-shrink-0 items-start pb-4">
+                        
+                        <!-- Chart 1: Persentase Double Click Per Juri -->
+                        <div class="flex flex-col items-center bg-gray-50 p-4 rounded-xl border border-gray-100 shadow-sm">
+                            <h3 class="font-black text-slate-700 text-xs text-center uppercase mb-3 leading-tight h-8">Persentase Double Click (Per Juri)</h3>
+                            <div class="w-full aspect-square max-h-[200px] flex justify-center items-center relative">
+                                <canvas id="chartDcJuri"></canvas>
+                                <div id="pie-empty-1" class="hidden absolute inset-0 flex flex-col justify-center items-center text-gray-400">
+                                    <i class="fas fa-check-circle text-2xl text-green-400 mb-1"></i><span class="text-[10px] font-bold">0% Pelanggaran</span>
+                                </div>
+                            </div>
+                            <p class="text-[9px] text-gray-500 text-center mt-4 border-t pt-2 w-full font-semibold">Tingkat dominasi juri yang melakukan double click.</p>
+                        </div>
+
+                        <!-- Chart 2: Persentase Double Click Sah vs Tidak Sah -->
+                        <div class="flex flex-col items-center bg-gray-50 p-4 rounded-xl border border-gray-100 shadow-sm">
+                            <h3 class="font-black text-slate-700 text-xs text-center uppercase mb-3 leading-tight h-8">Validasi Status Double Click</h3>
+                            <div class="w-full aspect-square max-h-[200px] flex justify-center items-center relative">
+                                <canvas id="chartDcStatus"></canvas>
+                                <div id="pie-empty-2" class="hidden absolute inset-0 flex flex-col justify-center items-center text-gray-400">
+                                    <i class="fas fa-info-circle text-2xl text-blue-400 mb-1"></i><span class="text-[10px] font-bold">Belum Ada Data</span>
+                                </div>
+                            </div>
+                            <p class="text-[9px] text-gray-500 text-center mt-4 border-t pt-2 w-full font-semibold">Berapa % double click yang akhirnya disahkan / dihanguskan.</p>
+                        </div>
+
+                        <!-- Chart 3: Persentase Poin Tidak Sah (Non-DC vs DC) -->
+                        <div class="flex flex-col items-center bg-gray-50 p-4 rounded-xl border border-gray-100 shadow-sm">
+                            <h3 class="font-black text-slate-700 text-xs text-center uppercase mb-3 leading-tight h-8">Rasio Poin Tidak Sah / Hangus</h3>
+                            <div class="w-full aspect-square max-h-[200px] flex justify-center items-center relative">
+                                <canvas id="chartInvalidPoints"></canvas>
+                                <div id="pie-empty-3" class="hidden absolute inset-0 flex flex-col justify-center items-center text-gray-400">
+                                    <i class="fas fa-star text-2xl text-yellow-400 mb-1"></i><span class="text-[10px] font-bold">Semua Poin Sah</span>
+                                </div>
+                            </div>
+                            <p class="text-[9px] text-gray-500 text-center mt-4 border-t pt-2 w-full font-semibold">Penyebab poin hangus: Murni tdk sah vs Akibat Double Click.</p>
+                        </div>
+
+                    </div>
+
+                    <!-- GRID DETAIL PIE CHART DC TIAP JURI TIAP BABAK -->
+                    <div class="w-full mt-4 border-t border-gray-200 pt-6 pb-4">
+                        <h3 class="text-center font-black text-slate-700 text-xs md:text-sm mb-4 uppercase tracking-widest">Detail Double Click Tiap Juri & Babak (Sah vs Tidak Sah)</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <!-- JURI 1 -->
+                            <div class="flex flex-col gap-3 bg-gray-50 p-4 rounded-xl border border-gray-100 shadow-sm">
+                                <h4 class="font-black text-indigo-700 text-center uppercase border-b pb-2 text-xs">JURI 1</h4>
+                                <div class="grid grid-cols-3 gap-2 mt-2">
+                                    <div class="flex flex-col items-center">
+                                        <span class="text-[9px] font-bold text-gray-500 mb-1">BABAK 1</span>
+                                        <div class="w-full aspect-square max-h-[80px] relative flex justify-center items-center">
+                                            <canvas id="chartDc_j1_0"></canvas>
+                                            <div id="pie-empty-j1-0" class="hidden absolute inset-0 flex flex-col justify-center items-center text-gray-400"><i class="fas fa-minus text-gray-300"></i></div>
+                                        </div>
+                                    </div>
+                                    <div class="flex flex-col items-center border-l border-r border-gray-200 px-1">
+                                        <span class="text-[9px] font-bold text-gray-500 mb-1">BABAK 2</span>
+                                        <div class="w-full aspect-square max-h-[80px] relative flex justify-center items-center">
+                                            <canvas id="chartDc_j1_1"></canvas>
+                                            <div id="pie-empty-j1-1" class="hidden absolute inset-0 flex flex-col justify-center items-center text-gray-400"><i class="fas fa-minus text-gray-300"></i></div>
+                                        </div>
+                                    </div>
+                                    <div class="flex flex-col items-center">
+                                        <span class="text-[9px] font-bold text-gray-500 mb-1">BABAK 3</span>
+                                        <div class="w-full aspect-square max-h-[80px] relative flex justify-center items-center">
+                                            <canvas id="chartDc_j1_2"></canvas>
+                                            <div id="pie-empty-j1-2" class="hidden absolute inset-0 flex flex-col justify-center items-center text-gray-400"><i class="fas fa-minus text-gray-300"></i></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- JURI 2 -->
+                            <div class="flex flex-col gap-3 bg-gray-50 p-4 rounded-xl border border-gray-100 shadow-sm">
+                                <h4 class="font-black text-indigo-700 text-center uppercase border-b pb-2 text-xs">JURI 2</h4>
+                                <div class="grid grid-cols-3 gap-2 mt-2">
+                                    <div class="flex flex-col items-center">
+                                        <span class="text-[9px] font-bold text-gray-500 mb-1">BABAK 1</span>
+                                        <div class="w-full aspect-square max-h-[80px] relative flex justify-center items-center">
+                                            <canvas id="chartDc_j2_0"></canvas>
+                                            <div id="pie-empty-j2-0" class="hidden absolute inset-0 flex flex-col justify-center items-center text-gray-400"><i class="fas fa-minus text-gray-300"></i></div>
+                                        </div>
+                                    </div>
+                                    <div class="flex flex-col items-center border-l border-r border-gray-200 px-1">
+                                        <span class="text-[9px] font-bold text-gray-500 mb-1">BABAK 2</span>
+                                        <div class="w-full aspect-square max-h-[80px] relative flex justify-center items-center">
+                                            <canvas id="chartDc_j2_1"></canvas>
+                                            <div id="pie-empty-j2-1" class="hidden absolute inset-0 flex flex-col justify-center items-center text-gray-400"><i class="fas fa-minus text-gray-300"></i></div>
+                                        </div>
+                                    </div>
+                                    <div class="flex flex-col items-center">
+                                        <span class="text-[9px] font-bold text-gray-500 mb-1">BABAK 3</span>
+                                        <div class="w-full aspect-square max-h-[80px] relative flex justify-center items-center">
+                                            <canvas id="chartDc_j2_2"></canvas>
+                                            <div id="pie-empty-j2-2" class="hidden absolute inset-0 flex flex-col justify-center items-center text-gray-400"><i class="fas fa-minus text-gray-300"></i></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- JURI 3 -->
+                            <div class="flex flex-col gap-3 bg-gray-50 p-4 rounded-xl border border-gray-100 shadow-sm">
+                                <h4 class="font-black text-indigo-700 text-center uppercase border-b pb-2 text-xs">JURI 3</h4>
+                                <div class="grid grid-cols-3 gap-2 mt-2">
+                                    <div class="flex flex-col items-center">
+                                        <span class="text-[9px] font-bold text-gray-500 mb-1">BABAK 1</span>
+                                        <div class="w-full aspect-square max-h-[80px] relative flex justify-center items-center">
+                                            <canvas id="chartDc_j3_0"></canvas>
+                                            <div id="pie-empty-j3-0" class="hidden absolute inset-0 flex flex-col justify-center items-center text-gray-400"><i class="fas fa-minus text-gray-300"></i></div>
+                                        </div>
+                                    </div>
+                                    <div class="flex flex-col items-center border-l border-r border-gray-200 px-1">
+                                        <span class="text-[9px] font-bold text-gray-500 mb-1">BABAK 2</span>
+                                        <div class="w-full aspect-square max-h-[80px] relative flex justify-center items-center">
+                                            <canvas id="chartDc_j3_1"></canvas>
+                                            <div id="pie-empty-j3-1" class="hidden absolute inset-0 flex flex-col justify-center items-center text-gray-400"><i class="fas fa-minus text-gray-300"></i></div>
+                                        </div>
+                                    </div>
+                                    <div class="flex flex-col items-center">
+                                        <span class="text-[9px] font-bold text-gray-500 mb-1">BABAK 3</span>
+                                        <div class="w-full aspect-square max-h-[80px] relative flex justify-center items-center">
+                                            <canvas id="chartDc_j3_2"></canvas>
+                                            <div id="pie-empty-j3-2" class="hidden absolute inset-0 flex flex-col justify-center items-center text-gray-400"><i class="fas fa-minus text-gray-300"></i></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL TRACKER DOUBLE CLICK (TABEL) -->
+    <div id="tracker-modal" class="hidden fixed inset-0 bg-slate-900/90 z-[1000] flex items-center justify-center p-2 md:p-4 backdrop-blur-sm transition-opacity">
+        <div class="bg-white rounded-xl md:rounded-3xl w-full max-w-4xl relative shadow-2xl border-4 border-red-100 max-h-[98vh] flex flex-col overflow-hidden">
+            
+            <!-- Tombol Navigasi Modal -->
+            <div class="absolute top-3 right-3 md:top-4 md:right-5 z-20 flex gap-2 items-center">
+                <button onclick="exportToPDF('pdf-tracker-area', 'Riwayat_Double_Click.pdf')" class="bg-rose-600 hover:bg-rose-700 text-white px-3 py-1.5 md:px-4 md:py-2 rounded shadow-md text-[10px] md:text-xs font-black tracking-wide flex items-center gap-2 transition-colors">
+                    <i class="fas fa-file-pdf"></i> <span class="hidden sm:inline">EXPORT PDF</span><span class="sm:hidden">PDF</span>
+                </button>
+                <button onclick="toggleTracker(false)" class="text-gray-400 hover:text-red-500 text-xl md:text-2xl transition-colors bg-white rounded-full w-8 h-8 flex items-center justify-center shadow-sm">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <!-- Container Scroll -->
+            <div class="flex-1 overflow-y-auto custom-scrollbar w-full h-full">
+                
+                <!-- Area Target Export PDF -->
+                <div id="pdf-tracker-area" class="p-4 md:p-8 bg-white w-full min-h-full">
+                    <h2 class="text-center font-black text-red-600 text-lg md:text-2xl mb-1 uppercase tracking-widest mt-2 md:mt-0"><i class="fas fa-hand-pointer mr-2"></i>Riwayat Double Click</h2>
+                    <p class="text-center text-[10px] md:text-xs text-gray-500 font-bold uppercase mb-6 border-b pb-4">Tabel Detail Juri yang klik poin sama lebih dari 1x dalam waktu &lt; 2 Detik</p>
+                    
+                    <div id="duplicate-wrapper" class="hidden w-full overflow-x-auto rounded-lg shadow-sm border border-red-100">
+                        <table class="table-bordered text-center w-full m-0 min-w-[600px]">
+                            <thead class="bg-red-50">
+                                <tr>
+                                    <th class="w-[15%] text-red-700">WAKTU</th>
+                                    <th class="w-[15%] text-red-700">JURI</th>
+                                    <th class="w-[15%] text-red-700">SUDUT</th>
+                                    <th class="w-[15%] text-red-700">BABAK</th>
+                                    <th class="w-[15%] text-red-700">POIN</th>
+                                    <th class="w-[25%] text-red-700">STATUS AKHIR</th>
+                                </tr>
+                            </thead>
+                            <tbody id="duplicate-tracker-body" class="font-mono text-gray-800">
+                                <!-- Data tabel dirender via JS -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Layout Kosong (Aman) -->
+                    <div id="duplicate-tracker-empty" class="text-center bg-green-50 text-green-700 p-6 rounded-xl text-sm font-bold border border-green-200 shadow-sm mt-4">
+                        <i class="fas fa-shield-alt text-4xl md:text-5xl block mb-3 text-green-500"></i>
+                        Aman! Tidak ada indikasi pelanggaran juri menekan poin yang sama berulang.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN SCREEN -->
+    <div id="screen-kp" class="screen">
+        
+        <!-- Header Top -->
+        <div class="p-3 md:p-4 flex justify-between items-center border-b border-gray-200 bg-white shadow-sm z-10 shrink-0">
+            <!-- Container Tombol Kiri -->
+            <div class="flex flex-col sm:flex-row gap-2">
+                <button onclick="toggleStatistik(true)" class="text-[9px] md:text-[11px] font-black text-white bg-indigo-600 hover:bg-indigo-700 border border-indigo-700 px-3 py-2 rounded shadow-md uppercase transition-colors flex items-center justify-center gap-2">
+                    <i class="fas fa-chart-pie text-sm"></i> <span class="hidden sm:inline">STATISTIK</span>
+                </button>
+                <button onclick="toggleTracker(true)" class="text-[9px] md:text-[11px] font-black text-white bg-rose-600 hover:bg-rose-700 border border-rose-700 px-3 py-2 rounded shadow-md uppercase transition-colors flex items-center justify-center gap-2">
+                    <i class="fas fa-exclamation-triangle text-sm"></i> <span class="hidden sm:inline">DOUBLE CLICK</span>
+                </button>
+            </div>
+            
+            <div class="text-center flex-1 mx-2 md:mx-4 flex flex-col items-center justify-center overflow-hidden">
+                <span class="text-[14px] sm:text-[18px] md:text-[22px] font-black text-slate-800 block uppercase tracking-widest truncate w-full">KETUA PERTANDINGAN</span>
+                <span id="kp-partai-info" class="text-[9px] md:text-[11px] font-bold text-gray-500 uppercase italic mt-1 truncate w-full">MEMUAT DATA...</span>
+            </div>
+
+            <div class="flex flex-col items-end min-w-[70px] md:min-w-[100px]">
+                <span id="kp-timer-disp" class="text-2xl sm:text-3xl md:text-4xl font-black text-gray-900 font-mono leading-none tracking-wider">00:00</span>
+                <span id="kp-round-badge" class="text-[9px] md:text-[11px] bg-yellow-400 text-black px-2 py-0.5 rounded mt-1.5 font-black uppercase tracking-widest shadow-sm border border-yellow-500">BABAK -</span>
+            </div>
+        </div>
+        
+        <!-- Main Area -->
+        <div class="flex-1 flex flex-col p-2 md:p-4 gap-3 md:gap-4 overflow-hidden bg-slate-100">
+            <!-- Info Atlet Card (Hanya Nama dan Kontingen, Tanpa Kotak Nilai) -->
+            <div class="grid grid-cols-2 gap-3 md:gap-4 flex-shrink-0">
+                <div class="sudut-biru-bg bg-white rounded-xl md:rounded-2xl p-3 flex flex-col justify-center items-center shadow-md border border-blue-200">
+                    <span class="text-blue-600 font-black text-[10px] md:text-xs uppercase tracking-widest mb-1"><i class="fas fa-square mr-1 text-blue-500"></i>SUDUT BIRU</span>
+                    <span id="kp-b-nama" class="text-gray-900 font-black text-sm md:text-base uppercase text-center w-full truncate">---</span>
+                    <span id="kp-b-kont" class="text-gray-500 font-bold text-[9px] md:text-[10px] uppercase text-center w-full truncate mt-0.5">---</span>
+                </div>
+
+                <div class="sudut-merah-bg bg-white rounded-xl md:rounded-2xl p-3 flex flex-col justify-center items-center shadow-md border border-red-200">
+                    <span class="text-red-600 font-black text-[10px] md:text-xs uppercase tracking-widest mb-1">SUDUT MERAH <i class="fas fa-square ml-1 text-red-500"></i></span>
+                    <span id="kp-m-nama" class="text-gray-900 font-black text-sm md:text-base uppercase text-center w-full truncate">---</span>
+                    <span id="kp-m-kont" class="text-gray-500 font-bold text-[9px] md:text-[10px] uppercase text-center w-full truncate mt-0.5">---</span>
+                </div>
+            </div>
+
+            <!-- Tabel Riwayat Juri Lengkap -->
+            <div class="flex-1 bg-white rounded-xl md:rounded-2xl border border-gray-200 shadow-xl flex flex-col overflow-hidden">
+                <div class="bg-gray-800 p-2 md:p-3 flex justify-between items-center shrink-0">
+                    <h3 class="text-white font-black text-[11px] md:text-sm uppercase tracking-widest ml-2"><i class="fas fa-list-alt text-blue-400 mr-2"></i> Riwayat Poin Detail Juri</h3>
+                    <div class="flex items-center gap-2 text-[9px] md:text-[11px] font-bold text-green-300 bg-green-900/50 px-3 py-1 rounded-full border border-green-700">
+                        <div class="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div> LIVE
+                    </div>
+                </div>
+
+                <div class="flex-1 overflow-auto custom-scrollbar p-0">
+                    <table class="table-bordered text-center h-full w-full border-b-0">
+                        <thead class="sticky top-0 z-10 shadow-sm bg-gray-100">
+                            <tr>
+                                <th class="w-[15%]">SUDUT</th>
+                                <th class="w-[10%]">JURI</th>
+                                <th class="w-[25%]">BABAK 1</th>
+                                <th class="w-[25%]">BABAK 2</th>
+                                <th class="w-[25%]">BABAK 3</th>
+                            </tr>
+                        </thead>
+                        <tbody class="font-mono text-gray-800 text-xs md:text-sm">
+                            <!-- SUDUT BIRU -->
+                            <tr>
+                                <td rowspan="3" class="bg-blue-50/50 border-blue-200 align-middle">
+                                    <div class="bg-blue-600 text-white font-black px-3 py-1.5 md:px-5 md:py-2 rounded shadow-md text-[11px] md:text-sm uppercase tracking-widest">BIRU</div>
+                                </td>
+                                <td class="bg-gray-50 text-gray-700 font-black">JURI 1</td>
+                                <td id="hist-kp-biru-j1-0" class="leading-loose align-top p-2 md:p-3">-</td>
+                                <td id="hist-kp-biru-j1-1" class="leading-loose align-top p-2 md:p-3">-</td>
+                                <td id="hist-kp-biru-j1-2" class="leading-loose align-top p-2 md:p-3">-</td>
+                            </tr>
+                            <tr>
+                                <td class="bg-gray-50 text-gray-700 font-black">JURI 2</td>
+                                <td id="hist-kp-biru-j2-0" class="leading-loose align-top p-2 md:p-3">-</td>
+                                <td id="hist-kp-biru-j2-1" class="leading-loose align-top p-2 md:p-3">-</td>
+                                <td id="hist-kp-biru-j2-2" class="leading-loose align-top p-2 md:p-3">-</td>
+                            </tr>
+                            <tr>
+                                <td class="bg-gray-50 text-gray-700 font-black">JURI 3</td>
+                                <td id="hist-kp-biru-j3-0" class="leading-loose align-top p-2 md:p-3">-</td>
+                                <td id="hist-kp-biru-j3-1" class="leading-loose align-top p-2 md:p-3">-</td>
+                                <td id="hist-kp-biru-j3-2" class="leading-loose align-top p-2 md:p-3">-</td>
+                            </tr>
+
+                            <!-- SUDUT MERAH -->
+                            <tr>
+                                <td rowspan="3" class="bg-red-50/50 border-red-200 align-middle">
+                                    <div class="bg-red-600 text-white font-black px-3 py-1.5 md:px-5 md:py-2 rounded shadow-md text-[11px] md:text-sm uppercase tracking-widest">MERAH</div>
+                                </td>
+                                <td class="bg-gray-50 text-gray-700 font-black">JURI 1</td>
+                                <td id="hist-kp-merah-j1-0" class="leading-loose align-top p-2 md:p-3">-</td>
+                                <td id="hist-kp-merah-j1-1" class="leading-loose align-top p-2 md:p-3">-</td>
+                                <td id="hist-kp-merah-j1-2" class="leading-loose align-top p-2 md:p-3">-</td>
+                            </tr>
+                            <tr>
+                                <td class="bg-gray-50 text-gray-700 font-black">JURI 2</td>
+                                <td id="hist-kp-merah-j2-0" class="leading-loose align-top p-2 md:p-3">-</td>
+                                <td id="hist-kp-merah-j2-1" class="leading-loose align-top p-2 md:p-3">-</td>
+                                <td id="hist-kp-merah-j2-2" class="leading-loose align-top p-2 md:p-3">-</td>
+                            </tr>
+                            <tr>
+                                <td class="bg-gray-50 text-gray-700 font-black">JURI 3</td>
+                                <td id="hist-kp-merah-j3-0" class="leading-loose align-top p-2 md:p-3">-</td>
+                                <td id="hist-kp-merah-j3-1" class="leading-loose align-top p-2 md:p-3">-</td>
+                                <td id="hist-kp-merah-j3-2" class="leading-loose align-top p-2 md:p-3">-</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- Keterangan Legend Diperbarui -->
+                <div class="bg-slate-50 p-2 md:p-3 border-t border-gray-200 text-center flex flex-wrap justify-center gap-3 md:gap-5 shrink-0">
+                    <span class="text-[9px] md:text-[11px] text-gray-600 font-bold uppercase flex items-center gap-1.5"><span class="bg-green-500 text-white w-4 h-4 md:w-5 md:h-5 rounded-full inline-flex items-center justify-center shadow text-[9px] md:text-[10px] font-black">1</span> Poin Sah</span>
+                    <span class="text-[9px] md:text-[11px] text-gray-600 font-bold uppercase flex items-center gap-1.5"><span class="bg-yellow-500 text-white w-4 h-4 md:w-5 md:h-5 rounded-full inline-flex items-center justify-center shadow text-[9px] md:text-[10px] font-black">1</span> Double Click (Sah)</span>
+                    <span class="text-[9px] md:text-[11px] text-gray-600 font-bold uppercase flex items-center gap-1.5"><span class="bg-red-500 text-white w-4 h-4 md:w-5 md:h-5 rounded-full inline-flex items-center justify-center shadow text-[9px] md:text-[10px] font-black line-through decoration-white decoration-2">1</span> Double Click (Hangus)</span>
+                    <span class="text-[9px] md:text-[11px] text-gray-600 font-bold uppercase flex items-center gap-1.5"><span class="text-gray-700 text-[10px] md:text-xs font-black border border-gray-300 px-1.5 py-0.5 rounded bg-white">1</span> Menunggu / Proses</span>
+                    <span class="text-[9px] md:text-[11px] text-gray-600 font-bold uppercase flex items-center gap-1.5"><span class="text-gray-400 line-through decoration-red-500 decoration-2 text-[10px] md:text-xs font-black px-1">1</span> Hangus (Biasa)</span>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+    import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+    // Registrasi Plugin DataLabels untuk Chart.js
+    Chart.register(ChartDataLabels);
+
+    const firebaseConfig = {
+  apiKey: "AIzaSyAVwQw-zBMEVbRaQc2lcWfdss3l2zOhoNs",
+  authDomain: "pscp-ternate.firebaseapp.com",
+  databaseURL: "https://pscp-ternate-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "pscp-ternate",
+  storageBucket: "pscp-ternate.firebasestorage.app",
+  messagingSenderId: "1057698178770",
+  appId: "1:1057698178770:web:d4ed0a01f84d26603c2f0b"
+};
+
+    const app = initializeApp(firebaseConfig);
+    const database = getDatabase(app);
+    const dbRef = ref(database, 'pencak_scoring_state');
+
+    window.state = {};
+    window.isStatistikOpen = false;
+    window.isTrackerOpen = false;
+    
+    // Objek Global Chart
+    window.charts = {
+        dcJuri: null,
+        dcStatus: null,
+        invalidPoints: null,
+        dc_j1_0: null, dc_j1_1: null, dc_j1_2: null,
+        dc_j2_0: null, dc_j2_1: null, dc_j2_2: null,
+        dc_j3_0: null, dc_j3_1: null, dc_j3_2: null
+    };
+
+    onValue(dbRef, (snapshot) => {
+        const data = snapshot.val();
+        if (data) { 
+            window.state = data; 
+            updateUI(); 
+        }
+    });
+
+    // Toggle Modal
+    window.toggleStatistik = function(show) {
+        window.isStatistikOpen = show;
+        const modal = document.getElementById('statistik-modal');
+        if (show) {
+            modal.classList.remove('hidden');
+            renderCharts();
+        } else {
+            modal.classList.add('hidden');
+        }
+    };
+
+    window.toggleTracker = function(show) {
+        window.isTrackerOpen = show;
+        const modal = document.getElementById('tracker-modal');
+        if (show) {
+            modal.classList.remove('hidden');
+            renderTrackerTable();
+        } else {
+            modal.classList.add('hidden');
+        }
+    };
+    
+    // Fungsi Ekspor PDF rapi menggunakan html2pdf
+    window.exportToPDF = function(elementId, filename) {
+        const element = document.getElementById(elementId);
+        element.classList.add('exporting-pdf');
+        
+        const opt = {
+            margin:       0.3,
+            filename:     filename,
+            image:        { type: 'jpeg', quality: 1 },
+            html2canvas:  { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+            jsPDF:        { unit: 'in', format: 'a4', orientation: 'landscape' }
+        };
+
+        html2pdf().set(opt).from(element).save().then(() => {
+            element.classList.remove('exporting-pdf');
+        });
+    };
+
+    // Fungsi Kalkulasi Semua Data (Statistik & Tracker)
+    function calculateData() {
+        let stats = {
+            dcJuri: { j1: 0, j2: 0, j3: 0 },
+            dcStatus: { sah: 0, tidakSah: 0 },
+            pointStatus: { valid: 0, invalidNonDc: 0, invalidDc: 0 },
+            dcDetail: {
+                j1: { 0: { sah: 0, tidakSah: 0 }, 1: { sah: 0, tidakSah: 0 }, 2: { sah: 0, tidakSah: 0 } },
+                j2: { 0: { sah: 0, tidakSah: 0 }, 1: { sah: 0, tidakSah: 0 }, 2: { sah: 0, tidakSah: 0 } },
+                j3: { 0: { sah: 0, tidakSah: 0 }, 1: { sah: 0, tidakSah: 0 }, 2: { sah: 0, tidakSah: 0 } }
+            }
+        };
+        let duplicateTracker = [];
+        const now = Date.now();
+
+        if (!window.state) return { stats, duplicateTracker };
+
+        ['biru', 'merah'].forEach(sudut => {
+            ['j1', 'j2', 'j3'].forEach(j => {
+                [0, 1, 2].forEach(b => {
+                    let rawHistory = window.state[sudut]?.history?.[j]?.[b];
+                    
+                    let history = [];
+                    if (rawHistory) {
+                        history = Array.isArray(rawHistory) ? rawHistory.filter(Boolean) : Object.values(rawHistory).filter(Boolean);
+                    }
+                    
+                    // Urutkan berdasarkan waktu ketukan
+                    history.sort((a, b) => {
+                        let ta = (typeof a === 'object' && a.t) ? a.t : 0;
+                        let tb = (typeof b === 'object' && b.t) ? b.t : 0;
+                        return ta - tb;
+                    });
+
+                    history.forEach((hit, index) => {
+                        if (typeof hit === 'object' && hit.t) {
+                            
+                            // Logika Deteksi Lebih Akurat: 
+                            // Cek mundur pada antrean history apakah ada poin yg valuenya SAMA diklik dalam jarak waktu <= 2000ms
+                            let isDc = false;
+                            for (let i = index - 1; i >= 0; i--) {
+                                if (hit.t - history[i].t <= 2000) {
+                                    if (history[i].v === hit.v) {
+                                        isDc = true;
+                                        break;
+                                    }
+                                } else {
+                                    break; // karena data sudah di-sort, jika selisih > 2 detik maka bisa distop pencariannya
+                                }
+                            }
+                            
+                            let isSah = hit.s;
+                            let isHangus = !hit.s && (now - hit.t > 2000);
+
+                            // Tambah poin valid
+                            if (isSah) stats.pointStatus.valid++;
+
+                            // Jika aksi diklasifikasikan Double Click (<2 detik)
+                            if (isDc) {
+                                stats.dcJuri[j]++; // Hitung per Juri
+                                
+                                if (isSah) {
+                                    stats.dcStatus.sah++; // DC tapi akhirnya Sah
+                                    stats.dcDetail[j][b].sah++;
+                                } else if (isHangus) {
+                                    stats.dcStatus.tidakSah++; // DC dan Hangus
+                                    stats.pointStatus.invalidDc++; // Poin hangus disebabkan karena DC
+                                    stats.dcDetail[j][b].tidakSah++;
+                                }
+
+                                let dt = new Date(hit.t);
+                                let timeStr = `${dt.getHours().toString().padStart(2, '0')}:${dt.getMinutes().toString().padStart(2, '0')}:${dt.getSeconds().toString().padStart(2, '0')}.${dt.getMilliseconds().toString().padStart(3, '0')}`;
+                                
+                                let statusStr = isSah ? 'SAH' : (isHangus ? 'TIDAK SAH / HANGUS' : 'PROSES');
+                                let statusClass = isSah ? 'text-green-700 bg-green-100 border-green-300' : (statusStr === 'PROSES' ? 'text-yellow-700 bg-yellow-100 border-yellow-300' : 'text-red-700 bg-red-100 border-red-300');
+
+                                duplicateTracker.push({
+                                    waktuRaw: hit.t, waktu: timeStr,
+                                    juri: j.toUpperCase().replace('J', 'JURI '),
+                                    sudut: sudut.toUpperCase(),
+                                    sudutClass: sudut === 'biru' ? 'text-blue-600 font-black' : 'text-red-600 font-black',
+                                    babak: b + 1, poin: hit.v,
+                                    status: statusStr, statusClass: statusClass
+                                });
+                            } else {
+                                // Bukan Double Click
+                                if (isHangus) {
+                                    stats.pointStatus.invalidNonDc++; // Hangus murni (bukan karena klik dobel)
+                                }
+                            }
+                        }
+                    });
+                });
+            });
+        });
+
+        // Urutkan tracker dari aksi yang terbaru
+        duplicateTracker.sort((a, b) => b.waktuRaw - a.waktuRaw);
+        
+        return { stats, duplicateTracker };
+    }
+
+    // Builder untuk Pie Chart
+    function createOrUpdateChart(chartName, canvasId, labels, data, colors, emptyId, miniMode = false) {
+        let sum = data.reduce((a, b) => a + b, 0);
+        let emptyEl = document.getElementById(emptyId);
+        let canvasEl = document.getElementById(canvasId);
+
+        if (sum === 0) {
+            canvasEl.classList.add('hidden');
+            emptyEl.classList.remove('hidden');
+            return;
+        } else {
+            canvasEl.classList.remove('hidden');
+            emptyEl.classList.add('hidden');
+        }
+
+        if (window.charts[chartName]) {
+            window.charts[chartName].data.labels = labels;
+            window.charts[chartName].data.datasets[0].data = data;
+            window.charts[chartName].data.datasets[0].backgroundColor = colors;
+            window.charts[chartName].update();
+        } else {
+            const ctx = canvasEl.getContext('2d');
+            window.charts[chartName] = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: data,
+                        backgroundColor: colors,
+                        borderWidth: 2,
+                        borderColor: '#ffffff'
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false, animation: { duration: 0 },
+                    plugins: {
+                        legend: { display: !miniMode, position: 'bottom', labels: { boxWidth: 12, font: { size: 10, family: 'Montserrat' } } },
+                        datalabels: {
+                            formatter: (value, ctx) => {
+                                let total = ctx.chart.data.datasets[0].data.reduce((a, b) => a + b, 0);
+                                if (total === 0 || value === 0) return null;
+                                return (value * 100 / total).toFixed(1) + "%";
+                            },
+                            color: '#fff', font: { weight: 'bold', size: miniMode ? 8 : 11, family: 'Montserrat' }
+                        },
+                        tooltip: {
+                            enabled: true
+                        }
+                    }
+                }
+            });
+        }
+    }
+
+    // Render Semua Diagram Lingkaran
+    window.renderCharts = function() {
+        if (!window.isStatistikOpen) return;
+        const { stats } = calculateData();
+
+        // 1. Chart Persentase DC Per Juri
+        createOrUpdateChart('dcJuri', 'chartDcJuri', 
+            ['Juri 1', 'Juri 2', 'Juri 3'], 
+            [stats.dcJuri.j1, stats.dcJuri.j2, stats.dcJuri.j3], 
+            ['#6366f1', '#0ea5e9', '#f59e0b'], 
+            'pie-empty-1'
+        );
+
+        // 2. Chart DC Sah vs Tidak Sah
+        createOrUpdateChart('dcStatus', 'chartDcStatus', 
+            ['DC Disahkan', 'DC Dihanguskan'], 
+            [stats.dcStatus.sah, stats.dcStatus.tidakSah], 
+            ['#10b981', '#ef4444'], 
+            'pie-empty-2'
+        );
+
+        // 3. Chart Rasio Poin Tidak Sah
+        createOrUpdateChart('invalidPoints', 'chartInvalidPoints', 
+            ['Hangus (Non-DC)', 'Hangus (Akibat DC)'], 
+            [stats.pointStatus.invalidNonDc, stats.pointStatus.invalidDc], 
+            ['#94a3b8', '#f43f5e'], 
+            'pie-empty-3'
+        );
+
+        // 4. Chart Detail DC per Juri per Babak (9 charts, Mini Mode = true)
+        ['j1', 'j2', 'j3'].forEach(j => {
+            [0, 1, 2].forEach(b => {
+                createOrUpdateChart(
+                    `dc_${j}_${b}`, 
+                    `chartDc_${j}_${b}`, 
+                    ['Sah', 'Tidak Sah'], 
+                    [stats.dcDetail[j][b].sah, stats.dcDetail[j][b].tidakSah], 
+                    ['#10b981', '#ef4444'], 
+                    `pie-empty-${j}-${b}`,
+                    true
+                );
+            });
+        });
+    };
+
+    // Render Tabel Tracker DC
+    window.renderTrackerTable = function() {
+        if (!window.isTrackerOpen) return;
+        const { duplicateTracker } = calculateData();
+        
+        const tbody = document.getElementById('duplicate-tracker-body');
+        const emptyMsg = document.getElementById('duplicate-tracker-empty');
+        const wrapper = document.getElementById('duplicate-wrapper');
+        
+        if (duplicateTracker.length > 0) {
+            wrapper.classList.remove('hidden');
+            emptyMsg.classList.add('hidden');
+            
+            tbody.innerHTML = duplicateTracker.map(item => `
+                <tr class="border-b border-gray-200 hover:bg-red-50/30 transition-colors">
+                    <td class="p-2 text-[10px] md:text-xs text-gray-600 font-bold">${item.waktu}</td>
+                    <td class="p-2 text-[10px] md:text-xs font-black text-gray-800">${item.juri}</td>
+                    <td class="p-2 text-[10px] md:text-xs ${item.sudutClass}">${item.sudut}</td>
+                    <td class="p-2 text-[10px] md:text-xs font-bold text-gray-700">Babak ${item.babak}</td>
+                    <td class="p-2"><span class="text-[11px] md:text-sm font-black text-gray-900 bg-gray-100 border border-gray-300 rounded shadow-sm inline-block px-3 py-0.5">${item.poin}</span></td>
+                    <td class="p-2 text-[9px] md:text-[11px] font-black"><span class="px-3 py-1 rounded border shadow-sm ${item.statusClass}">${item.status}</span></td>
+                </tr>
+            `).join('');
+        } else {
+            wrapper.classList.add('hidden');
+            emptyMsg.classList.remove('hidden');
+            tbody.innerHTML = '';
+        }
+    };
+
+    // Auto-update UI Utama setiap 1 detik (untuk memastikan poin hangus ter-render)
+    setInterval(() => {
+        updateUI();
+        if (window.isStatistikOpen) renderCharts();
+        if (window.isTrackerOpen) renderTrackerTable();
+    }, 1000);
+
+    // Update Tampilan Utama (UI Tabel Riwayat KP)
+    window.updateUI = function() {
+        if (!window.state || !window.state.matches) return;
+
+        const mb = window.state.bertandingIdx >= 0 ? window.state.matches[window.state.bertandingIdx] : window.state.matches[window.state.idx];
+        
+        const tStr = (s) => `${Math.floor(s/60).toString().padStart(2,'0')}:${((s||0)%60).toString().padStart(2,'0')}`;
+        document.getElementById('kp-timer-disp').innerText = tStr(window.state.timer);
+        document.getElementById('kp-round-badge').innerText = "BABAK " + (window.state.babak || 1);
+
+        document.getElementById('kp-partai-info').innerText = `PARTAI ${mb.p} / ${mb.fase} / ${mb.cat} ${mb.kelas} ${mb.gender}`.toUpperCase();
+        
+        document.getElementById('kp-b-nama').innerText = mb.b || "BIRU"; 
+        document.getElementById('kp-b-kont').innerText = mb.kb || "---";
+        document.getElementById('kp-m-nama').innerText = mb.m || "MERAH"; 
+        document.getElementById('kp-m-kont').innerText = mb.km || "---";
+
+        const currentTime = Date.now();
+
+        // FORMAT TABEL RIWAYAT JURI 
+        const formatHist = (arrData, isBiru) => {
+            let arr = [];
+            if (arrData) {
+                arr = Array.isArray(arrData) ? arrData.filter(Boolean) : Object.values(arrData).filter(Boolean);
+            }
+            
+            if (!arr || arr.length === 0) return '-';
+
+            arr.sort((a, b) => {
+                let ta = (typeof a === 'object' && a.t) ? a.t : 0;
+                let tb = (typeof b === 'object' && b.t) ? b.t : 0;
+                return ta - tb;
+            });
+
+            return arr.map((item, index) => {
+                if (typeof item === 'object' && item !== null) {
+                    
+                    // Identifikasi jika tombol yg sama diklik < 2 detik dengan membandingkan history ke belakang
+                    let isDc = false;
+                    for (let i = index - 1; i >= 0; i--) {
+                        if (item.t - arr[i].t <= 2000) {
+                            if (arr[i].v === item.v) {
+                                isDc = true;
+                                break;
+                            }
+                        } else {
+                            break;
+                        }
+                    }
+
+                    if (item.s) {
+                        // Jika poin disahkan. 
+                        // Jika Double Click (isDc) warnanya Kuning, sebaliknya Hijau
+                        let circleColor = isDc ? 'bg-yellow-500' : 'bg-green-500';
+                        return `<span class="${circleColor} text-white w-6 h-6 md:w-7 md:h-7 rounded-full inline-flex items-center justify-center font-black text-xs md:text-sm shadow m-0.5" title="Valid${isDc ? ' (Double Click)' : ''}">${item.v}</span>`;
+                    } else {
+                        if (isDc) {
+                            // JIka itu adalah Double Click tapi poin HANGUS/TIDAK SAH
+                            // Kita ganti warnanya supaya terekspos jelas bahwa ini pelanggaran double click (BUKAN HANGUS BIASA)
+                            let bgClass = (currentTime - item.t > 2000) ? 'bg-red-500' : 'bg-orange-400';
+                            let lineThrough = (currentTime - item.t > 2000) ? 'line-through decoration-white decoration-2' : '';
+                            return `<span class="${bgClass} text-white w-6 h-6 md:w-7 md:h-7 rounded-full inline-flex items-center justify-center font-black text-xs md:text-sm shadow m-0.5 ${lineThrough}" title="Double Click${(currentTime - item.t > 2000) ? ' Hangus' : ' Proses'}">${item.v}</span>`;
+                        } else {
+                            if (currentTime - item.t > 2000) {
+                                // Hangus biasa murni
+                                return `<span class="text-gray-400 line-through decoration-red-500 decoration-2 font-black text-xs md:text-sm inline-block m-0.5 px-1" title="Hangus">${item.v}</span>`;
+                            } else {
+                                // Sedang tahap processing
+                                return `<span class="text-gray-800 border border-gray-300 bg-white px-1.5 py-0.5 rounded font-bold text-xs md:text-sm inline-block m-0.5" title="Proses">${item.v}</span>`;
+                            }
+                        }
+                    }
+                } else {
+                    // Fallback untuk data yang belum memiliki timestamp
+                    return `<span class="bg-green-500 text-white w-6 h-6 md:w-7 md:h-7 rounded-full inline-flex items-center justify-center font-black text-xs md:text-sm shadow m-0.5">${item}</span>`;
+                }
+            }).join('<span class="text-gray-200 hide-on-pdf"> </span>');
+        };
+
+        [{ id: 'biru', isBiru: true }, { id: 'merah', isBiru: false }].forEach(s => {
+            ['j1', 'j2', 'j3'].forEach(j => {
+                [0, 1, 2].forEach(b => {
+                    const el = document.getElementById(`hist-kp-${s.id}-${j}-${b}`);
+                    if(el) {
+                        let hData = window.state[s.id]?.history?.[j]?.[b];
+                        el.innerHTML = formatHist(hData, s.isBiru);
+                    }
+                });
+            });
+        });
+    }
+</script>
+</body>
+</html>
